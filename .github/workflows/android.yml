@@ -24,11 +24,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Unzip project if zipped
+    - name: Unzip all zip files in repository
       run: |
-        if [ -f HarisElNet-Android-Project-2.zip ]; then
-          unzip -o HarisElNet-Android-Project-2.zip
-        fi
+        echo "Looking for zip files..."
+        for z in *.zip; do
+          if [ -f "$z" ]; then
+            echo "Extracting $z..."
+            unzip -o "$z"
+          fi
+        dones
+        ls -la
 
     - name: Install dependencies & Build Web Assets
       env:
@@ -42,22 +47,19 @@ jobs:
           npm install --legacy-peer-deps
           npm run build --if-present
           
-          # التأكد من وجود مجلد android وإضافته إن لم يكن موجوداً
           if [ ! -d "android" ]; then
             npx cap add android
           fi
           npx cap sync android
         else
-          echo "No package.json found!"
-          exit 1
+          echo "Warning: No package.json found, checking for raw Android project..."
         fi
 
     - name: Build APK and AAB
       run: |
-        # البحث عن مجلد المشروع والانتقال لمجلد android وتعديل الصلاحيات
         GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" -print -quit)
         if [ -z "$GRADLEW_PATH" ]; then
-          echo "Error: gradlew not found!"
+          echo "Error: gradlew not found anywhere in the repository!"
           exit 1
         fi
         ANDROID_DIR=$(dirname "$GRADLEW_PATH")
