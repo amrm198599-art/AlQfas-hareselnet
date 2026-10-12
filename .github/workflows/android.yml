@@ -41,13 +41,20 @@ jobs:
           cd "$PROJECT_DIR"
           npm install --legacy-peer-deps
           npm run build --if-present
-          npx cap sync android || true
+          
+          # التأكد من وجود مجلد android وإضافته إن لم يكن موجوداً
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
         else
-          echo "No package.json found, skipping npm build."
+          echo "No package.json found!"
+          exit 1
         fi
 
     - name: Build APK and AAB
       run: |
+        # البحث عن مجلد المشروع والانتقال لمجلد android وتعديل الصلاحيات
         GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" -print -quit)
         if [ -z "$GRADLEW_PATH" ]; then
           echo "Error: gradlew not found!"
