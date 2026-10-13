@@ -1,77 +1,31 @@
 name: Android Build
-
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
-
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Node.js 20
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-
-    - name: Unzip all zip files in repository
-      run: |
-        echo "Looking for zip files..."
-        for z in *.zip; do
-          if [ -f "$z" ]; then
-            echo "Extracting $z..."
-            unzip -o "$z"
-          fi
-        done
-        ls -la
-
-    - name: Install dependencies & Build Web Assets
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      run: |
-        PACKAGE_JSON_PATH=$(find . -name "package.json" -not -path "*/node_modules/*" -print -quit)
-        if [ -n "$PACKAGE_JSON_PATH" ]; then
-          PROJECT_DIR=$(dirname "$PACKAGE_JSON_PATH")
-          echo "Found Node project at: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
-          npm install --legacy-peer-deps
-          npm run build --if-present
-          
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-          npx cap sync android
-        else
-          echo "Warning: No package.json found, checking for raw Android project..."
-        fi
-
-    - name: Build APK and AAB
-      run: |
-        GRADLEW_PATH=$(find . -name "gradlew" -not -path "*/node_modules/*" -print -quit)
-        if [ -z "$GRADLEW_PATH" ]; then
-          echo "Error: gradlew not found anywhere in the repository!"
-          exit 1
-        fi
-        ANDROID_DIR=$(dirname "$GRADLEW_PATH")
-        echo "Found Android Gradle project at: $ANDROID_DIR"
-        cd "$ANDROID_DIR"
-        chmod +x gradlew
-        ./gradlew assembleDebug bundleRelease
-
-    - name: Upload Build Artifacts (APK & AAB)
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-builds
-        path: |
-          **/build/outputs/apk/debug/*.apk
-          **/build/outputs/bundle/release/*.aab
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+      - name: Unzip project
+        run: |
+          mkdir -p project
+          for z in *.zip; do unzip -o "$z" -d project; done
+          find project -maxdepth 3 | head -60
+      - name: Build APK and AAB
+        run: |
+          S=$(find project -name 'settings.gradle*' -not -path '*/node_modules/*' | head -n1)
+          if [ -z "$S" ]; then echo "No settings.gradle found, not an Android Gradle project"; exit 1; fi
+          cd "$(dirname "$S")"
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew assembleDebug bundleRelease; else gradle assembleDebug bundleRelease; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: |
+            project/**/build/outputs/apk/debug/*.apk
+            project/**/build/outputs/bundle/release/*.aab
